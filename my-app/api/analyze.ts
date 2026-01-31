@@ -2,6 +2,11 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { del } from "@vercel/blob";
 
+export const config = {
+  runtime: "nodejs20.x",
+};
+
+
 function arrayBufferToBase64(buf: ArrayBuffer) {
   return Buffer.from(buf).toString("base64");
 }
