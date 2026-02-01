@@ -1,36 +1,36 @@
-export const config = {
-  api: { bodyParser: false },
-};
+// my-app/api/upload.ts (CJS only)
 
-import type { NextApiRequest, NextApiResponse } from "next";
-import { put } from "@vercel/blob";
-import formidable from "formidable";
-import fs from "fs";
+declare const require: any;
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+const handler = async (req: any, res: any) => {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
+    const { put } = require("@vercel/blob");
+    const formidableLib = require("formidable");
+    const formidable = formidableLib.default || formidableLib; // ESM/CJS 호환
+    const fs = require("fs");
+
     const form = formidable({ multiples: false });
 
-    const { files } = await new Promise<{ files: formidable.Files }>((resolve, reject) => {
-      form.parse(req as any, (err, _fields, files) => {
+    const { files } = await new Promise<any>((resolve, reject) => {
+      form.parse(req, (err: any, _fields: any, files: any) => {
         if (err) reject(err);
         else resolve({ files });
       });
     });
 
-    const fileAny = (files as any).file;
+    const fileAny = files?.file;
     if (!fileAny) return res.status(400).json({ error: "Missing file" });
 
     const f = Array.isArray(fileAny) ? fileAny[0] : fileAny;
 
-    const filePath = f.filepath as string;
-    const originalName = (f.originalFilename as string) || `upload-${Date.now()}`;
-    const mime = (f.mimetype as string) || "application/octet-stream";
+    const filePath = f.filepath;
+    const originalName = f.originalFilename || `upload-${Date.now()}`;
+    const mime = f.mimetype || "application/octet-stream";
 
     const data = fs.readFileSync(filePath);
 
@@ -47,4 +47,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       detail: String(err?.message || err),
     });
   }
-}
+};
+
+module.exports = handler;
