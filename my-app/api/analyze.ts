@@ -1,7 +1,11 @@
 // my-app/api/analyze.ts
 
-const handler = async (req: any, res: any) => {
-  // CORS 필요하면 아래 주석 해제
+import type { NextApiRequest, NextApiResponse } from "next";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { del } from "@vercel/blob";
+
+const handler = async (req: NextApiRequest, res: NextApiResponse) => {
+  // ---- CORS 필요하면 사용 ----
   // res.setHeader("Access-Control-Allow-Origin", "*");
   // res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
   // res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -15,9 +19,6 @@ const handler = async (req: any, res: any) => {
   let image_url = "";
 
   try {
-    const { GoogleGenerativeAI } = require("@google/generative-ai");
-    const { del } = require("@vercel/blob");
-
     const body = req.body || {};
     const messages_text = String(body.messages_text || "");
     const user_context = String(body.user_context || "");
@@ -30,26 +31,22 @@ const handler = async (req: any, res: any) => {
       return res.status(500).json({ error: "Missing GEMINI_API_KEY" });
     }
 
-    // ---- Prompt (원하는대로 수정 가능) ----
+    // ---- PROMPT ----
     const prompt = `
-You are a digital safety / scam-risk analysis assistant.
-Return ONLY valid JSON.
+You are a digital safety and scam-risk analysis assistant.
+
+Return ONLY a valid JSON object.
+Do not include markdown, comments, or explanations.
 
 Schema:
 {
   "summary": string,
   "risk_level": "low" | "medium" | "high",
-  "confidence": number, // 0..1
+  "confidence": number,
   "red_flags": string[],
   "inconsistencies": string[],
   "next_steps": string[]
 }
-
-Context:
-- messages_text: user pasted conversation or text
-- user_context: any background about user/situation
-- link_url: url pasted by user
-- extra_notes: additional notes by user
 
 messages_text:
 ${messages_text}
@@ -64,21 +61,21 @@ extra_notes:
 ${extra_notes}
 `.trim();
 
+    // ---- Gemini init ----
     const genAI = new GoogleGenerativeAI(apiKey);
 
-    // JS SDK + v1beta에서 안정적으로 되는 모델
+    // ❗ 핵심 수정: gemini-pro ❌ → gemini-2.0-flash ✅
     const model = genAI.getGenerativeModel({
-      model: "models/gemini-pro",
+      model: "gemini-2.0-flash",
       generationConfig: {
         temperature: 0.2,
-        // JSON 강제 (가끔 모델이 말 섞으면 raw로 내려가게 처리함)
         responseMimeType: "application/json",
       },
     });
 
+    // ---- parts (text + optional image) ----
     const parts: any[] = [{ text: prompt }];
 
-    // ---- image_url 있으면 이미지도 같이 보냄 ----
     if (image_url) {
       try {
         const resp = await fetch(image_url);
@@ -87,14 +84,14 @@ ${extra_notes}
           const len = resp.headers.get("content-length");
           const size = len ? Number(len) : NaN;
 
-          // 안전장치: 5MB 제한
           if (!Number.isNaN(size) && size > 5 * 1024 * 1024) {
-            parts[0].text += `\n\nIMAGE_NOTE: Image too large to fetch (${size} bytes).`;
+            parts[0].text += `\n\nIMAGE_NOTE: Image too large (${size} bytes).`;
           } else if (!contentType.startsWith("image/")) {
-            parts[0].text += `\n\nIMAGE_NOTE: image_url content-type is not image: ${contentType}`;
+            parts[0].text += `\n\nIMAGE_NOTE: Not an image (${contentType}).`;
           } else {
             const buf = await resp.arrayBuffer();
             const b64 = Buffer.from(buf).toString("base64");
+
             parts.push({
               inlineData: {
                 mimeType: contentType || "image/jpeg",
@@ -103,24 +100,23 @@ ${extra_notes}
             });
           }
         } else {
-          parts[0].text += `\n\nIMAGE_NOTE: Failed to fetch image_url. status=${resp.status}`;
+          parts[0].text += `\n\nIMAGE_NOTE: Failed to fetch image (${resp.status}).`;
         }
       } catch (e: any) {
-        parts[0].text += `\n\nIMAGE_NOTE: Exception fetching image_url: ${String(
-          e?.message || e
-        )}`;
+        parts[0].text += `\n\nIMAGE_NOTE: ${String(e?.message || e)}`;
       }
     }
 
+    // ---- Gemini call ----
     const result = await model.generateContent(parts);
-    const text = result?.response?.text?.() ?? "";
+    const text = result.response.text();
 
-    // ---- JSON 파싱 (실패하면 raw 포함해서 반환) ----
+    // ---- JSON parsing (robust) ----
     let parsed: any = null;
+
     try {
       parsed = JSON.parse(text);
     } catch {
-      // JSON 일부만 뽑기 시도
       const start = text.indexOf("{");
       const end = text.lastIndexOf("}");
       if (start !== -1 && end !== -1 && end > start) {
@@ -132,22 +128,32 @@ ${extra_notes}
       }
     }
 
-    // 기본 정규화
+    // ---- normalize output ----
     if (parsed && typeof parsed === "object") {
-      if (typeof parsed.confidence !== "undefined") {
-        const n = Number(parsed.confidence);
-        parsed.confidence = Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0;
-      }
-      if (!Array.isArray(parsed.red_flags)) parsed.red_flags = [];
-      if (!Array.isArray(parsed.inconsistencies)) parsed.inconsistencies = [];
-      if (!Array.isArray(parsed.next_steps)) parsed.next_steps = [];
-      if (typeof parsed.summary !== "string") parsed.summary = String(parsed.summary || "");
-      if (!["low", "medium", "high"].includes(parsed.risk_level)) {
-        parsed.risk_level = "medium";
-      }
+      parsed.summary = typeof parsed.summary === "string" ? parsed.summary : "";
+      parsed.risk_level =
+        parsed.risk_level === "low" ||
+        parsed.risk_level === "medium" ||
+        parsed.risk_level === "high"
+          ? parsed.risk_level
+          : "medium";
+
+      const conf = Number(parsed.confidence);
+      parsed.confidence =
+        Number.isFinite(conf) ? Math.max(0, Math.min(1, conf)) : 0;
+
+      parsed.red_flags = Array.isArray(parsed.red_flags)
+        ? parsed.red_flags
+        : [];
+      parsed.inconsistencies = Array.isArray(parsed.inconsistencies)
+        ? parsed.inconsistencies
+        : [];
+      parsed.next_steps = Array.isArray(parsed.next_steps)
+        ? parsed.next_steps
+        : [];
     }
 
-    // Blob cleanup (best effort)
+    // ---- cleanup vercel blob (best effort) ----
     if (image_url && image_url.includes("blob.vercel-storage.com")) {
       try {
         await del(image_url);
@@ -171,4 +177,4 @@ ${extra_notes}
   }
 };
 
-module.exports = handler;
+export default handler;
