@@ -1,46 +1,46 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
+export const config = {
+  api: { bodyParser: false },
+};
 
+import type { NextApiRequest, NextApiResponse } from "next";
+import { put } from "@vercel/blob";
+import formidable from "formidable";
+import fs from "fs";
 
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    const body = (req.body || {}) as HandleUploadBody;
+    const form = formidable({ multiples: false });
 
-    const host = req.headers.host || "localhost";
-    const proto =
-      (req.headers["x-forwarded-proto"] as string) ||
-      (host.includes("localhost") ? "http" : "https");
-
-    // handleUpload가 표준 Request를 요구해서 Node req를 Request로 변환
-    const request = new Request(`${proto}://${host}${req.url || "/api/upload"}`, {
-      method: "POST",
-      headers: new Headers(
-        Object.entries(req.headers)
-          .filter(([, v]) => typeof v === "string") as Array<[string, string]>
-      ),
-      body: JSON.stringify(body),
+    const { files } = await new Promise<{ files: formidable.Files }>((resolve, reject) => {
+      form.parse(req as any, (err, _fields, files) => {
+        if (err) reject(err);
+        else resolve({ files });
+      });
     });
 
-    const jsonResponse = await handleUpload({
-      body,
-      request,
-      onBeforeGenerateToken: async (pathname) => {
-        return {
-          allowedContentTypes: ["image/jpeg", "image/png", "image/webp"],
-          maximumSizeInBytes: 3 * 1024 * 1024,
-          addRandomSuffix: true,
-          tokenPayload: JSON.stringify({ purpose: "scam-analysis" }),
-        };
-      },
-      onUploadCompleted: async () => {},
+    const fileAny = (files as any).file;
+    if (!fileAny) return res.status(400).json({ error: "Missing file" });
+
+    const f = Array.isArray(fileAny) ? fileAny[0] : fileAny;
+
+    const filePath = f.filepath as string;
+    const originalName = (f.originalFilename as string) || `upload-${Date.now()}`;
+    const mime = (f.mimetype as string) || "application/octet-stream";
+
+    const data = fs.readFileSync(filePath);
+
+    const blob = await put(originalName, data, {
+      access: "public",
+      contentType: mime,
+      addRandomSuffix: true,
     });
 
-    return res.status(200).json(jsonResponse);
+    return res.status(200).json({ url: blob.url });
   } catch (err: any) {
     return res.status(500).json({
       error: "Upload failed",
