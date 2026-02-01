@@ -131,8 +131,16 @@ const styles: { [k: string]: React.CSSProperties } = {
     padding: 24,
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
     lineHeight: 1.6,
+    background: "#0b1f4a", // dark blue page bg
+    borderRadius: 16,
+    color: "#cce0ff", // light text
   },
-  title: { marginBottom: 18 },
+  title: { 
+    marginBottom: 24,
+    fontSize: 28,
+    textAlign: "center",
+    color: "#cce0ff",
+  },
   topRow: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
@@ -140,10 +148,11 @@ const styles: { [k: string]: React.CSSProperties } = {
     marginBottom: 18,
   },
   card: {
-    background: "#fff",
-    borderRadius: 12,
+    background: "#f0f6ff", // same as form background
+    borderRadius: 16,
     padding: 16,
-    boxShadow: "0 10px 25px rgba(0,0,0,0.06)",
+    boxShadow: "0 12px 28px rgba(0,0,0,0.08)",
+    color: "#0b3d91",
   },
   cardTitle: { fontWeight: 700, marginBottom: 8 },
   badge: {
@@ -169,15 +178,16 @@ const styles: { [k: string]: React.CSSProperties } = {
     transition: "width 0.35s ease",
   },
   section: {
-    background: "#fff",
-    borderRadius: 12,
+    background: "#f0f6ff", // match form background
+    borderRadius: 16,
     padding: 18,
     marginTop: 14,
-    boxShadow: "0 10px 25px rgba(0,0,0,0.06)",
+    boxShadow: "0 12px 28px rgba(0,0,0,0.08)",
+    color: "#0b3d91",
   },
   muted: { color: "#6b7280", fontSize: 14 },
   link: {
-    color: "#111827",
+    color: "#ff7f50", // match analyze button orange
     fontWeight: 700,
     textDecoration: "underline",
   },
