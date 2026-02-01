@@ -23,7 +23,6 @@ export default function FormPage() {
   const [error, setError] = useState<string>("");
 
   const canAnalyze = useMemo(() => {
-    // 최소 하나는 있어야 분석 의미가 있음
     return (
       messagesText.trim().length > 0 ||
       userContext.trim().length > 0 ||
@@ -39,10 +38,7 @@ export default function FormPage() {
     const fd = new FormData();
     fd.append("file", imageFile);
 
-    const r = await fetch("/api/upload", {
-      method: "POST",
-      body: fd,
-    });
+    const r = await fetch("/api/upload", { method: "POST", body: fd });
 
     if (!r.ok) {
       const t = await r.text().catch(() => "");
@@ -57,7 +53,7 @@ export default function FormPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (loading) return; // 중복 호출 방지
+    if (loading) return;
     setError("");
 
     if (!canAnalyze) {
@@ -84,7 +80,6 @@ export default function FormPage() {
         body: JSON.stringify(payload),
       });
 
-      // 429 등도 여기서 잡아서 사용자에게 보여주기
       const text = await r.text();
       let data: any = null;
       try {
@@ -100,7 +95,6 @@ export default function FormPage() {
 
       const result = data as AnalysisResult;
 
-      // report 페이지로 이동하면서 결과 전달
       navigate("/report", { state: { result } });
     } catch (err: any) {
       setError(String(err?.message || err));
@@ -110,99 +104,96 @@ export default function FormPage() {
   }
 
   return (
-    <div style={styles.container}>
-      <h1 style={styles.title}>Scam Risk Analyzer</h1>
+    <div style={styles.page}>
+      <div style={styles.container}>
+        <h1 style={styles.title}>Scam Risk Analyzer</h1>
 
-      <form onSubmit={onSubmit} style={styles.form}>
-        <label style={styles.label}>
-          Messages Text
-          <textarea
-            value={messagesText}
-            onChange={(e) => setMessagesText(e.target.value)}
-            style={styles.textarea}
-            placeholder="Paste the conversation or message text here..."
-          />
-        </label>
+        <form onSubmit={onSubmit} style={styles.form}>
+          <label style={styles.label}>
+            Messages Text
+            <textarea
+              value={messagesText}
+              onChange={(e) => setMessagesText(e.target.value)}
+              style={styles.textarea}
+              placeholder="Paste the conversation or message text here..."
+            />
+          </label>
 
-        <label style={styles.label}>
-          User Context
-          <textarea
-            value={userContext}
-            onChange={(e) => setUserContext(e.target.value)}
-            style={styles.textarea}
-            placeholder="Any background about the situation..."
-          />
-        </label>
+          <label style={styles.label}>
+            User Context
+            <textarea
+              value={userContext}
+              onChange={(e) => setUserContext(e.target.value)}
+              style={styles.textarea}
+              placeholder="Any background about the situation..."
+            />
+          </label>
 
-        <label style={styles.label}>
-          Link URL
-          <input
-            value={linkUrl}
-            onChange={(e) => setLinkUrl(e.target.value)}
-            style={styles.input}
-            placeholder="https://..."
-          />
-        </label>
+          <label style={styles.label}>
+            Link URL
+            <input
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              style={styles.input}
+              placeholder="https://..."
+            />
+          </label>
 
-        <label style={styles.label}>
-          Extra Notes
-          <textarea
-            value={extraNotes}
-            onChange={(e) => setExtraNotes(e.target.value)}
-            style={styles.textarea}
-            placeholder="Anything else you want the analyzer to consider..."
-          />
-        </label>
+          <label style={styles.label}>
+            Extra Notes
+            <textarea
+              value={extraNotes}
+              onChange={(e) => setExtraNotes(e.target.value)}
+              style={styles.textarea}
+              placeholder="Anything else you want the analyzer to consider..."
+            />
+          </label>
 
-        <label style={styles.label}>
-          Optional Image
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setImageFile(e.target.files?.[0] || null)}
-            style={styles.input}
-          />
-        </label>
+          <label style={styles.label}>
+            Optional Image
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+              style={styles.input}
+            />
+          </label>
 
-        {error ? <div style={styles.error}>{error}</div> : null}
+          {error && <div style={styles.error}>{error}</div>}
 
-        <button
-          type="submit"
-          disabled={!canAnalyze || loading}
-          style={{
-            ...styles.button,
-            opacity: !canAnalyze || loading ? 0.6 : 1,
-            cursor: !canAnalyze || loading ? "not-allowed" : "pointer",
-          }}
-        >
-          {loading ? "Analyzing..." : "Analyze"}
-        </button>
-      </form>
+          <button
+            type="submit"
+            disabled={!canAnalyze || loading}
+            style={{
+              ...styles.button,
+              opacity: !canAnalyze || loading ? 0.6 : 1,
+              cursor: !canAnalyze || loading ? "not-allowed" : "pointer",
+            }}
+          >
+            {loading ? "Analyzing..." : "Analyze"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
 
 const styles: { [k: string]: React.CSSProperties } = {
-   page: {
+  page: {
     minHeight: "100vh",
+    background: "linear-gradient(180deg, #0b1f4a 0%, #1a3275 100%)",
     padding: 40,
     display: "flex",
     justifyContent: "center",
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
-    background: "linear-gradient(180deg, #0b2e6d 0%, #1a4aa6 100%)", // dark-blue gradient
   },
-  
   container: {
     maxWidth: 780,
-    margin: "40px auto",
-    padding: 24,
+    width: "100%",
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
-    background: "linear-gradient(180deg, #e6f0ff 0%, #ffffff 100%)",
-    borderRadius: 16,
   },
-  title: { 
-    marginBottom: 24, 
-    color: "#0b3d91",
+  title: {
+    marginBottom: 24,
+    color: "#cce0ff",
     textAlign: "center",
     fontSize: 28,
   },
@@ -212,11 +203,11 @@ const styles: { [k: string]: React.CSSProperties } = {
     padding: 24,
     boxShadow: "0 12px 28px rgba(0,0,0,0.08)",
   },
-  label: { 
-    display: "block", 
-    marginBottom: 16, 
-    fontWeight: 600, 
-    color: "#0b3d91"
+  label: {
+    display: "block",
+    marginBottom: 16,
+    fontWeight: 600,
+    color: "#0b3d91",
   },
   textarea: {
     width: "100%",
@@ -254,10 +245,6 @@ const styles: { [k: string]: React.CSSProperties } = {
     color: "#fff",
     boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
     transition: "transform 0.2s, box-shadow 0.2s",
-  },
-  buttonHover: {
-    transform: "translateY(-2px)",
-    boxShadow: "0 6px 16px rgba(0,0,0,0.15)",
   },
   error: {
     marginTop: 8,
